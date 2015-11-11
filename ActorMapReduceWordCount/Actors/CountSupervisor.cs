@@ -8,34 +8,43 @@ using Akka.Actor;
 using Akka.Routing;
 using ActorMapReduceWordCount.Messages;
 using ActorMapReduceWordCount.Writers;
+using System.Diagnostics;
 
 namespace ActorMapReduceWordCount.Actors
 {
     public class CountSupervisor : ReceiveActor
     {
-        public static Props Create(IWriteStuff writer)
+        public static Props Create(IWriteStuff writer, Stopwatch sw)
         {
-            return Props.Create(() => new CountSupervisor(writer));
+            return Props.Create(() => new CountSupervisor(writer, sw));
         }
 
         private readonly IWriteStuff _writer;
         private Dictionary<String, Int32> _wordCount;
         private readonly Int32 _numberOfRoutees;
         private Int32 _completeRoutees;
+        private Stopwatch _stopwatch;
 
-        public CountSupervisor(IWriteStuff writer)
+        public CountSupervisor(IWriteStuff writer, Stopwatch sw)
         {
             _writer = writer;
             _wordCount = new Dictionary<String, Int32>();
             _numberOfRoutees = 5;
             _completeRoutees = 0;
+            _stopwatch = sw;
 
+            SetupBehaviors(writer);
+        }
+
+        private void SetupBehaviors(IWriteStuff writer)
+        {
             Receive<StartCount>(msg =>
             {
                 var fileInfo = new FileInfo(msg.FileName);
                 var lineNumber = 0;
 
-                var lineReader = Context.ActorOf(new RoundRobinPool(_numberOfRoutees).Props(LineReaderActor.Create(writer)));
+                var lineReader = Context.ActorOf(new RoundRobinPool(_numberOfRoutees)
+                                    .Props(LineReaderActor.Create(writer)));
 
                 using (var reader = fileInfo.OpenText())
                 {
@@ -77,6 +86,9 @@ namespace ActorMapReduceWordCount.Actors
                     {
                         _writer.WriteLine($"{word.Key} == {word.Value} times");
                     }
+
+                    _stopwatch.Stop();
+                    writer.WriteLine($"Elapsed time: {_stopwatch.ElapsedMilliseconds}");
                 }
             });
         }
