@@ -1,38 +1,64 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using ActorMapReduceWordCount.Actors;
-using ActorMapReduceWordCount.Messages;
 using ActorMapReduceWordCount.Readers;
 using ActorMapReduceWordCount.Writers;
-using Akka.Actor;
 
 namespace ActorMapReduceWordCount
 {
-    class Program
+    class ProceduralRunner
     {
         static void Main(string[] args)
         {
             var writer = new ConsoleWriter();
             var reader = new ConsoleReader();
-            writer.WriteLine("ACTOR:::");
+
+            writer.WriteLine("PROCEDURAL:::");
 
             var file = PrintInstructionsAndGetFile(reader, writer);
             if (file == null)
             {
                 return;
             }
+
             var sw = new Stopwatch();
             sw.Start();
 
+            var fileInfo = new FileInfo(file);
+            var wordCounts = new Dictionary<String, Int32>();
 
-            var system = ActorSystem.Create("mrWordCount");
+            using (var fileReader = fileInfo.OpenText())
+            {
+                while (!fileReader.EndOfStream)
+                {
+                    var line = fileReader.ReadLine();
+                    var cleanFileContents = Regex.Replace(line, @"[^\u0000-\u007F]", " ");
 
-            var counter = system.ActorOf(CountSupervisor.Create(writer, sw), "supervisor");
-            counter.Tell(new StartCount(file));
+                    var wordArray = cleanFileContents.Split(new char[] { ' ' }, 
+                        StringSplitOptions.RemoveEmptyEntries);
+                    foreach (var word in wordArray)
+                    {
+                        if (wordCounts.ContainsKey(word))
+                            wordCounts[word] += 1;
+                        else
+                            wordCounts.Add(word, 1);
+                    }
+                }
+            }
+
+            var topWords = wordCounts.OrderByDescending(w => w.Value).Take(25);
+            foreach (var word in topWords)
+            {
+                writer.WriteLine($"{word.Key} == {word.Value} times");
+            }
+
+            sw.Stop();
+            writer.WriteLine($"Elapsed time: {sw.ElapsedMilliseconds}");
 
             reader.ReadLine();
         }
@@ -61,5 +87,6 @@ namespace ActorMapReduceWordCount
 
             return file;
         }
+
     }
 }

@@ -25,13 +25,19 @@ namespace ActorMapReduceWordCount.Actors
         {
             _writer = writer;
 
+            SetupBehaviors();
+        }
+
+        private void SetupBehaviors()
+        {
             Receive<ReadLineForCounting>(msg =>
             {
                 var cleanFileContents = Regex.Replace(msg.Line, @"[^\u0000-\u007F]", " ");
 
                 var wordCounts = new Dictionary<String, Int32>();
 
-                var wordArray = cleanFileContents.Split(new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                var wordArray = cleanFileContents.Split(new char[] { ' ' }, 
+                    StringSplitOptions.RemoveEmptyEntries);
                 foreach (var word in wordArray)
                 {
                     if (wordCounts.ContainsKey(word))
